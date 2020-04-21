@@ -1,6 +1,13 @@
 DVD Rental Database in pytholog 
 ================
 
+We will use [DVD Rental](https://www.postgresqltutorial.com/postgresql-sample-database/) database to feed a knowledge base
+as facts and rules, then logically query the database.
+
+###### [Here](https://github.com/MNoorFawi/neo4j-and-postgresql-with-R) we can find how to create the database in postgresql and insert the data.
+
+Let's connect to the database in python and see how it looks like:
+
 ``` python
 import psycopg2
 import pandas as pd
@@ -20,6 +27,8 @@ pd.read_sql("SELECT * FROM language;", psql)
 # 5            6  German               2006-02-15 10:02:19
 ```
 
+Let's see what the table names are:
+
 ``` python
 cursor.execute("select relname from pg_class where relkind='r' and relname !~ '^(pg_|sql_)';")
 print(cursor.fetchall())
@@ -33,6 +42,8 @@ print(cursor.fetchall())
 def query_defn(table):
     return f"SELECT * FROM {table};"
 ```
+
+No we will read the tables we will query into python and do some transformation to have values in lowercase.
 
 ``` python
 actor = pd.read_sql(query_defn("actor"), psql)
@@ -73,6 +84,10 @@ print(actor.head())
 # 4         5     Johnny  ... 2013-05-26 14:47:57.620  johnny_lollobrigida
 ```
 
+### Let's initiate the knowledge base and feed it with for loops.
+
+#### We will use rules as the query statements and views if we need some joining and conditions.
+
 ``` python
 import pytholog as pl
 dvd = pl.KnowledgeBase("dvd_rental")
@@ -83,10 +98,12 @@ for i in range(film.shape[0]):
 for i in range(language.shape[0]):
     dvd([f"language({language.language_id[i]}, {language.name[i]})"])
     
+## simple query	
 dvd(["film_language(F, L) :- film(_, F, LID), language(LID, L)"])
 dvd.query(pl.Expr("film_language(young_language, L)"))
 # [{'L': 'english'}]
 ```
+We will create film_category view
 
 ``` python
 for i in range(category.shape[0]):
@@ -95,7 +112,9 @@ for i in range(category.shape[0]):
 for i in range(film_category.shape[0]):
     dvd([f"filmcategory({film_category.film_id[i]}, {film_category.category_id[i]})"])
     
-dvd(["film_category(F, C) :- film(FID, F, _), filmcategory(FID, CID), category(CID, C)"])
+dvd(["film_category(F, C) :- film(FID, F, _), filmcategory(FID, CID), category(CID, C)"]) ## "_" to neglect this term
+
+## another query to see what films in sci-fi category 
 dvd.query(pl.Expr("film_category(F, sci-fi)"))
 
 # [{'F': 'annie_identity'},
@@ -110,6 +129,8 @@ dvd.query(pl.Expr("film_category(F, sci-fi)"))
 #  {'F': 'whisperer_giant'},
 #  {'F': 'wonderland_christmas'}]
 ```
+
+Let's join actors and films
 
 ``` python
 for i in range(actor.shape[0]):
@@ -127,6 +148,7 @@ dvd(["film_actor(F, A) :- film(FID, F, _), filmactor(FID, AID), actor(AID, A)"])
 dvd.query(pl.Expr("film_actor(annie_identity, Actor)"))
 #[{'Actor': 'adam_grant'}, {'Actor': 'cate_mcqueen'}, {'Actor': 'greta_keitel'}]
 
+## query actors in a film
 dvd.query(pl.Expr("film_actor(academy_dinosaur, Actor)"))
 # [{'Actor': 'penelope_guiness'},
 #  {'Actor': 'christian_gable'},
@@ -139,6 +161,7 @@ dvd.query(pl.Expr("film_actor(academy_dinosaur, Actor)"))
 #  {'Actor': 'rock_dukakis'},
 #  {'Actor': 'mary_keitel'}]
 
+### query films that an actor performed in
 dvd.query(pl.Expr("film_actor(Film, penelope_guiness)"))
 # [{'Film': 'academy_dinosaur'},
 #  {'Film': 'anaconda_confessions'},
@@ -160,9 +183,14 @@ dvd.query(pl.Expr("film_actor(Film, penelope_guiness)"))
 #  {'Film': 'westward_seabiscuit'},
 #  {'Film': 'wizard_coldblooded'}]
 
+### simple yes or no query
 dvd.query(pl.Expr("film_actor(academy_dinosaur, lucille_tracy)"))
 # ['Yes']
+```
 
+Actor Category view to see in which categories an actor performed.
+
+```python
 dvd(["actor_category(A, C) :- film_actor(F, A), film_category(F, C)"])
 
 jd = dvd.query(pl.Expr("actor_category(jennifer_davis, Category)"))
@@ -188,6 +216,8 @@ pprint(merged)
 #               'sports',
 #               'travel'}}
 ```
+
+Finally, let's now write those facts and rules to a prolog file.
 
 ``` python
 with open("dvd_rental.pl", "w") as f:
